@@ -1,13 +1,17 @@
-// ===== Catness Coin — Telegram-бот на Cloudflare Workers (webhook) =====
-// Отвечает на /start приветствием с кнопками «Играть» и «Канал».
-// Токен хранится в секрете BOT_TOKEN (НЕ в коде).
+// ===== Catness Coin — бот + проверка подписки на Cloudflare Workers =====
+// Маршруты:
+//   GET  /            -> "жив"
+//   POST /tg          -> webhook Telegram (отвечает на /start)
+//   POST /verify      -> проверка подписки на канал (для мини-приложения)
 //
-// Деплой: вставь этот файл в Worker через дашборд Cloudflare,
-// добавь секреты BOT_TOKEN (обязательно) и WEBHOOK_SECRET (желательно),
-// затем привяжи webhook (см. cloudflare/README.md).
+// Секреты воркера:
+//   BOT_TOKEN       (обязательно) — токен от @BotFather
+//   WEBHOOK_SECRET  (желательно)  — секрет вебхука Telegram
+//   CHANNEL         (необязательно) — @username канала, по умолчанию @Catness_Coin
 
 const GAME_URL = 'https://netvitek.github.io/catness-coin/';
 const CHANNEL_URL = 'https://t.me/Catness_Coin';
+const DEFAULT_CHANNEL = '@Catness_Coin';
 
 const WELCOME =
   'Котость пробудилась! 🐱\n\n' +
@@ -21,55 +25,109 @@ const KEYBOARD = {
   ],
 };
 
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+};
+
 export default {
   async fetch(request, env) {
-    // Проверка обращения (GET) — для проверки, что воркер жив
-    if (request.method !== 'POST') {
+    const url = new URL(request.url);
+
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { status: 204, headers: CORS });
+    }
+    if (request.method === 'GET') {
       return new Response('Catness Coin bot is running 🐱', { status: 200 });
     }
-
-    // Защита: пускаем только запросы с правильным секретом (если задан)
-    if (env.WEBHOOK_SECRET) {
-      const got = request.headers.get('X-Telegram-Bot-Api-Secret-Token');
-      if (got !== env.WEBHOOK_SECRET) {
-        return new Response('forbidden', { status: 403 });
-      }
-    }
-
     if (!env.BOT_TOKEN) {
       return new Response('BOT_TOKEN not set', { status: 500 });
     }
 
-    let update;
-    try { update = await request.json(); }
-    catch (_) { return new Response('bad request', { status: 400 }); }
-
-    const msg = update.message;
-    const text = msg && typeof msg.text === 'string' ? msg.text.trim() : '';
-
-    if (msg && text.startsWith('/start')) {
-      await tg(env.BOT_TOKEN, 'sendMessage', {
-        chat_id: msg.chat.id,
-        text: WELCOME,
-        parse_mode: 'HTML',
-        disable_web_page_preview: true,
-        reply_markup: KEYBOARD,
-      });
+    // ---- Проверка подписки из мини-приложения ----
+    if (url.pathname === '/verify') {
+      return handleVerify(request, env);
     }
 
-    // Telegram'у достаточно ответить 200 OK
+    // ---- Webhook Telegram ----
+    if (env.WEBHOOK_SECRET) {
+      const got = request.headers.get('X-Telegram-Bot-Api-Secret-Token');
+      if (got !== env.WEBHOOK_SECRET) return new Response('forbidden', { status: 403 });
+    }
+    let update;
+    try { update = await request.json(); } catch (_) { return new Response('bad', { status: 400 }); }
+    const msg = update.message;
+    const text = msg && typeof msg.text === 'string' ? msg.text.trim() : '';
+    if (msg && text.startsWith('/start')) {
+      await tg(env.BOT_TOKEN, 'sendMessage', {
+        chat_id: msg.chat.id, text: WELCOME, parse_mode: 'HTML',
+        disable_web_page_preview: true, reply_markup: KEYBOARD,
+      });
+    }
     return new Response('ok', { status: 200 });
   },
 };
 
+async function handleVerify(request, env) {
+  const channel = env.CHANNEL || DEFAULT_CHANNEL;
+  let initData = '';
+  try { initData = (await request.json()).initData || ''; } catch (_) {}
+
+  const user = await validateInitData(initData, env.BOT_TOKEN);
+  if (!user || !user.id) {
+    return json({ ok: false, error: 'bad_init_data', subscribed: false });
+  }
+
+  const subscribed = await isSubscribed(env.BOT_TOKEN, channel, user.id);
+  return json({ ok: true, subscribed, userId: user.id });
+}
+
+// Проверяем подпись initData (чтобы нельзя было подделать свой id)
+async function validateInitData(initData, botToken) {
+  if (!initData) return null;
+  const params = new URLSearchParams(initData);
+  const hash = params.get('hash');
+  if (!hash) return null;
+  const entries = [...params.entries()]
+    .filter(([k]) => k !== 'hash')
+    .sort((a, b) => (a[0] < b[0] ? -1 : 1));
+  const dataCheckString = entries.map(([k, v]) => `${k}=${v}`).join('\n');
+  const enc = new TextEncoder();
+  const secretKey = await hmac(enc.encode('WebAppData'), enc.encode(botToken));
+  const calc = await hmac(secretKey, enc.encode(dataCheckString));
+  if (toHex(calc) !== hash) return null;
+  const userStr = params.get('user');
+  if (!userStr) return null;
+  try { return JSON.parse(userStr); } catch (_) { return null; }
+}
+
+async function isSubscribed(token, chatId, userId) {
+  try {
+    const r = await fetch(
+      `https://api.telegram.org/bot${token}/getChatMember?chat_id=${encodeURIComponent(chatId)}&user_id=${userId}`
+    );
+    const j = await r.json();
+    if (!j.ok) return false;
+    return ['creator', 'administrator', 'member'].includes(j.result.status);
+  } catch (_) { return false; }
+}
+
+async function hmac(keyBytes, msgBytes) {
+  const key = await crypto.subtle.importKey('raw', keyBytes, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  return new Uint8Array(await crypto.subtle.sign('HMAC', key, msgBytes));
+}
+function toHex(buf) { return [...buf].map((b) => b.toString(16).padStart(2, '0')).join(''); }
+function json(obj) {
+  return new Response(JSON.stringify(obj), {
+    status: 200, headers: { 'Content-Type': 'application/json', ...CORS },
+  });
+}
+
 async function tg(token, method, payload) {
   try {
     await fetch(`https://api.telegram.org/bot${token}/${method}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
     });
-  } catch (e) {
-    // тихо игнорируем — Telegram повторит при необходимости
-  }
+  } catch (_) {}
 }

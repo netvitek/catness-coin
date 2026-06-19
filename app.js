@@ -36,6 +36,25 @@ const CARDS = [
 
 // ---- Канал (обязательная подписка для игры) ----
 const CHANNEL_URL = 'https://t.me/Catness_Coin';
+// Адрес воркера Cloudflare для настоящей проверки подписки.
+// Пока пусто — проверка «на доверии»; после деплоя сюда впишется https://...workers.dev
+const WORKER_URL = '';
+
+// Спрашиваем у сервера, реально ли человек подписан на канал.
+// Возвращает true / false, либо null если проверка недоступна (воркер не настроен).
+async function verifySubscription() {
+  if (!WORKER_URL || !tg?.initData) return null;
+  try {
+    const r = await fetch(WORKER_URL + '/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ initData: tg.initData }),
+    });
+    const j = await r.json();
+    if (!j || j.ok === false) return null;
+    return !!j.subscribed;
+  } catch (e) { return null; }
+}
 
 // ---- Задания (обновляются каждые сутки) ----
 const TASKS = [
@@ -58,6 +77,7 @@ const DEFAULT_STATE = {
   tapsToday: 0,          // тапов за сегодня (для задания)
   upgradedToday: false,  // качал ли карточку сегодня
   subscribed: false,     // подписан на канал (обязательно для игры)
+  subBonusGiven: false,  // бонус за подписку уже выдан (чтобы не фармили)
   firstSeen: 0,          // дата первого захода (для профиля)
   boostUntil: 0,
   lastSeen: Date.now(),
@@ -428,18 +448,36 @@ function openGate() {
     $('#gateCheck').style.display = 'block';
     haptic('light');
   });
-  $('#gateCheck').addEventListener('click', () => {
-    state.subscribed = true;
-    state.balance += 5000;
-    state.totalEarned += 5000;
-    gateActive = false;
-    $('#sheetClose').style.display = '';
-    haptic('medium');
-    toast('+5 000 за подписку! 🎉');
-    closeSheet();
-    render();
-    save();
+  $('#gateCheck').addEventListener('click', async () => {
+    const btn = $('#gateCheck');
+    btn.disabled = true;
+    btn.textContent = 'Проверяю…';
+    const sub = await verifySubscription();
+    if (sub === false) {
+      // воркер реально сказал «не подписан»
+      btn.disabled = false;
+      btn.textContent = '✓ Я подписался';
+      toast('Ты ещё не подписан на канал 😿');
+      haptic('rigid');
+      return;
+    }
+    // sub === true (подтверждено) или null (проверка не настроена — пускаем)
+    grantAccess();
   });
+}
+
+function grantAccess() {
+  const bonus = state.subBonusGiven ? 0 : 5000;
+  state.subscribed = true;
+  state.subBonusGiven = true;
+  if (bonus) { state.balance += bonus; state.totalEarned += bonus; }
+  gateActive = false;
+  $('#sheetClose').style.display = '';
+  haptic('medium');
+  toast(bonus ? '+5 000 за подписку! 🎉' : 'Подписка подтверждена ✓');
+  closeSheet();
+  render();
+  save();
 }
 
 // ===== Тосты =====
@@ -478,6 +516,13 @@ async function init() {
   if (!state.firstSeen) state.firstSeen = Date.now(); // дата первого захода
   applyOffline();
   checkDailyReset();
+
+  // Перепроверяем подписку на канал на каждом запуске (если воркер настроен).
+  // Отписался — снова блокируем игру.
+  const sub = await verifySubscription();
+  if (sub === true) state.subscribed = true;
+  else if (sub === false) state.subscribed = false;
+
   render();
   if (!state.subscribed) openGate();
   startLoops();
