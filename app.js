@@ -58,22 +58,41 @@ const DEFAULT_STATE = {
   tapsToday: 0,          // тапов за сегодня (для задания)
   upgradedToday: false,  // качал ли карточку сегодня
   subscribed: false,     // подписан на канал (обязательно для игры)
+  firstSeen: 0,          // дата первого захода (для профиля)
   boostUntil: 0,
   lastSeen: Date.now(),
 };
 
-let state = load();
+let state = { ...DEFAULT_STATE };
+const SAVE_KEY = 'catness_save';
 
-function load() {
-  try {
-    const raw = localStorage.getItem('catness_save');
-    if (raw) return { ...DEFAULT_STATE, ...JSON.parse(raw) };
-  } catch (e) {}
+// ---- Облачное сохранение Telegram (переживает закрытие/переустановку) ----
+const CLOUD = tg?.CloudStorage;
+function cloudGet(key) {
+  return new Promise((res) => {
+    if (!CLOUD) return res(null);
+    try { CLOUD.getItem(key, (e, v) => res(e ? null : (v || null))); }
+    catch (_) { res(null); }
+  });
+}
+function cloudSet(key, val) {
+  if (CLOUD) { try { CLOUD.setItem(key, val, () => {}); } catch (_) {} }
+}
+
+// Загрузка: сперва облако, потом локально
+async function loadState() {
+  let raw = await cloudGet(SAVE_KEY);
+  if (!raw) { try { raw = localStorage.getItem(SAVE_KEY); } catch (_) {} }
+  try { if (raw) return { ...DEFAULT_STATE, ...JSON.parse(raw) }; } catch (e) {}
   return { ...DEFAULT_STATE };
 }
+
+// Сохранение: и в облако, и локально
 function save() {
   state.lastSeen = Date.now();
-  localStorage.setItem('catness_save', JSON.stringify(state));
+  const raw = JSON.stringify(state);
+  try { localStorage.setItem(SAVE_KEY, raw); } catch (_) {}
+  cloudSet(SAVE_KEY, raw);
 }
 
 // Сброс заданий раз в сутки
@@ -125,7 +144,7 @@ function fmt(n) {
 }
 
 // ===== Оффлайн-доход при загрузке =====
-(function applyOffline() {
+function applyOffline() {
   const now = Date.now();
   const dt = Math.min((now - (state.lastSeen || now)) / 1000, 3 * 3600); // максимум 3 часа
   if (dt > 0) {
@@ -135,7 +154,7 @@ function fmt(n) {
     state.energy = Math.min(state.energyMax, state.energy + state.energyRegen * dt);
     if (earned > 50) setTimeout(() => toast(`💤 Пока тебя не было: +${fmt(earned)}`), 600);
   }
-})();
+}
 
 // ===== DOM =====
 const $ = (s) => document.querySelector(s);
@@ -231,6 +250,7 @@ navItems.forEach((btn) => {
   btn.addEventListener('click', () => {
     const tab = btn.dataset.tab;
     if (tab === 'exchange') { closeSheet(); setActiveNav(btn); return; }
+    if (tab === 'channel') { openTg(CHANNEL_URL); haptic('light'); return; } // просто ссылка на канал
     setActiveNav(btn);
     openTab(tab);
   });
@@ -249,7 +269,7 @@ $('#sheetBackdrop').addEventListener('click', closeSheet);
 
 function openTab(tab) {
   if (tab === 'cards') renderCards();
-  else if (tab === 'friends') renderFriends();
+  else if (tab === 'profile') renderProfile();
   else if (tab === 'earn') renderEarn();
   openSheet();
 }
@@ -292,20 +312,43 @@ function buyCard(id) {
   save();
 }
 
-function renderFriends() {
-  const refLink = `https://t.me/CatnessCoin_bot?start=ref_${tg?.initDataUnsafe?.user?.id || 'demo'}`;
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
+}
+
+function renderProfile() {
+  const u = tg?.initDataUnsafe?.user;
+  const name = u ? [u.first_name, u.last_name].filter(Boolean).join(' ') : 'Гость';
+  const username = u?.username ? '@' + u.username : '—';
+  const id = u?.id || '—';
+  const photo = u?.photo_url;
+  const joined = new Date(state.firstSeen || Date.now())
+    .toLocaleDateString('ru-RU', { day: '2-digit', month: 'long', year: 'numeric' });
+  const initial = (name && name[0]) ? name[0] : '🐱';
+  const avatar = photo
+    ? `<img src="${esc(photo)}" class="pf-avatar" alt="avatar">`
+    : `<div class="pf-avatar pf-avatar-ph">${esc(initial)}</div>`;
+  const { lg } = currentLeague();
+
   sheetBody.innerHTML = `
-    <h2>👬 Друзья</h2>
-    <p class="subtitle">Зови друзей — получай бонусы за каждого</p>
-    <div class="invite-banner">
-      <b>+5 000 монет</b><p>за каждого друга · +25 000 за друга с Premium</p>
+    <h2>👤 Профиль</h2>
+    <p class="subtitle">Твоя кото-карточка</p>
+    <div class="pf-head">
+      ${avatar}
+      <div>
+        <div class="pf-name">${esc(name)}</div>
+        <div class="pf-user">${esc(username)}</div>
+      </div>
     </div>
-    <button class="li-action" id="copyRef" style="width:100%;padding:14px">📨 Скопировать пригласительную ссылку</button>
-    <p class="subtitle" style="margin-top:16px;text-align:center">Пока приглашённых нет</p>`;
-  $('#copyRef').addEventListener('click', () => {
-    navigator.clipboard?.writeText(refLink).then(() => toast('Ссылка скопирована!'), () => {});
-    haptic('light');
-  });
+    <div class="pf-row"><span>Ник</span><b>${esc(username)}</b></div>
+    <div class="pf-row"><span>ID</span><b>${esc(id)}</b></div>
+    <div class="pf-row"><span>Дата захода</span><b>${joined}</b></div>
+    <div class="pf-row"><span>Лига</span><b>${lg.emoji} ${lg.name}</b></div>
+    <div class="pf-row"><span>Баланс</span><b>${fmt(state.balance)}</b></div>
+    <div class="pf-row"><span>Прибыль в час</span><b>${fmt(profitPerHour())}</b></div>
+    <div class="pf-row"><span>Всего заработано</span><b>${fmt(state.totalEarned)}</b></div>`;
 }
 
 function renderEarn() {
@@ -411,25 +454,33 @@ function toast(msg) {
 }
 
 // ===== Игровые тики =====
-// Регенерация энергии + пассивный доход
-setInterval(() => {
+function startLoops() {
+  // Регенерация энергии + пассивный доход
+  setInterval(() => {
+    checkDailyReset();
+    if (state.energy < state.energyMax) {
+      state.energy = Math.min(state.energyMax, state.energy + state.energyRegen);
+    }
+    const inc = profitPerSec();
+    if (inc > 0) { state.balance += inc; state.totalEarned += inc; }
+    render();
+  }, 1000);
+
+  // Автосохранение
+  setInterval(save, 5000);
+  window.addEventListener('beforeunload', save);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
+}
+
+// ===== Старт =====
+async function init() {
+  state = await loadState();
+  if (!state.firstSeen) state.firstSeen = Date.now(); // дата первого захода
+  applyOffline();
   checkDailyReset();
-  // энергия
-  if (state.energy < state.energyMax) {
-    state.energy = Math.min(state.energyMax, state.energy + state.energyRegen);
-  }
-  // пассивный доход
-  const inc = profitPerSec();
-  if (inc > 0) { state.balance += inc; state.totalEarned += inc; }
   render();
-}, 1000);
-
-// Автосохранение
-setInterval(save, 5000);
-window.addEventListener('beforeunload', save);
-document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
-
-// Старт
-checkDailyReset();
-render();
-if (!state.subscribed) openGate();
+  if (!state.subscribed) openGate();
+  startLoops();
+  save();
+}
+init();

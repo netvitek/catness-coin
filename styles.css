@@ -142,17 +142,17 @@ html, body {
 
 /* ===== Навигация ===== */
 .navbar {
-  display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px;
   background: var(--bg-soft); border-radius: var(--radius);
-  padding: 8px 6px; margin-bottom: 6px;
+  padding: 8px 4px; margin-bottom: 6px;
 }
 .nav-item {
   display: flex; flex-direction: column; align-items: center; gap: 3px;
   background: none; border: none; color: var(--text-dim);
-  font-size: 11px; font-weight: 600; cursor: pointer;
+  font-size: 10px; font-weight: 600; cursor: pointer;
   padding: 6px 0; border-radius: 12px; transition: .2s;
 }
-.nav-item .nav-emoji { font-size: 22px; }
+.nav-item .nav-emoji { font-size: 20px; }
 .nav-item.active { color: var(--gold); background: var(--bg-card); }
 
 /* ===== Шторка (вкладки) ===== */
@@ -221,6 +221,27 @@ html, body {
 }
 .invite-banner b { font-size: 16px; }
 .invite-banner p { font-size: 12px; opacity: .85; margin-top: 4px; }
+/* Профиль */
+.pf-head { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+.pf-avatar {
+  width: 68px; height: 68px; border-radius: 50%; object-fit: cover;
+  border: 2px solid var(--gold);
+}
+.pf-avatar-ph {
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg-card); font-size: 30px; font-weight: 800; color: var(--gold);
+  text-transform: uppercase;
+}
+.pf-name { font-size: 18px; font-weight: 800; }
+.pf-user { font-size: 13px; color: var(--text-dim); }
+.pf-row {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--bg-card); border-radius: 14px;
+  padding: 13px 16px; margin-bottom: 8px; font-size: 14px;
+}
+.pf-row span { color: var(--text-dim); }
+.pf-row b { font-weight: 700; }
+
 .toast {
   position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%);
   background: var(--bg-card); color: var(--text); padding: 12px 18px;
