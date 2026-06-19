@@ -99,13 +99,18 @@ html, body {
 .tap-button:active { transform: scale(.97); }
 .tap-glow {
   position: absolute; inset: 0; border-radius: 50%;
-  background: radial-gradient(circle, rgba(245,197,66,.28), rgba(245,197,66,0) 65%);
-  box-shadow: 0 0 60px rgba(245,197,66,.25);
+  background: radial-gradient(circle, rgba(245,197,66,.16), rgba(245,197,66,0) 60%);
 }
 .cat-img {
   width: 100%; height: 100%; object-fit: contain;
   pointer-events: none;
-  filter: drop-shadow(0 14px 30px rgba(0,0,0,.55));
+  /* лёгкое свечение + мягкая тень снизу — кот будто парит в воздухе */
+  filter: drop-shadow(0 22px 16px rgba(0,0,0,.30)) drop-shadow(0 0 18px rgba(245,197,66,.18));
+  animation: floatCat 3.5s ease-in-out infinite;
+}
+@keyframes floatCat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
 }
 .cat-fallback { font-size: 160px; }
 
