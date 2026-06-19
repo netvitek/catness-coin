@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Catness Coin</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+
+    <!-- Верхняя панель: лига и прибыль/час -->
+    <header class="topbar">
+      <div class="league" id="leagueBtn">
+        <span class="league-emoji" id="leagueEmoji">🥉</span>
+        <div class="league-info">
+          <span class="league-name" id="leagueName">Бронза</span>
+          <div class="league-progress"><div class="league-progress-fill" id="leagueProgress"></div></div>
+        </div>
+      </div>
+      <div class="profit-hour">
+        <span class="profit-label">прибыль в час</span>
+        <span class="profit-value"><i class="coin-mini"></i><span id="profitPerHour">0</span></span>
+      </div>
+    </header>
+
+    <!-- Баланс -->
+    <div class="balance">
+      <i class="coin-icon"></i>
+      <span id="balance">0</span>
+    </div>
+
+    <!-- Зона тапа -->
+    <main class="tap-zone">
+      <button class="tap-button" id="tapButton" aria-label="Тапни кота">
+        <div class="tap-glow"></div>
+        <img id="catImg" class="cat-img" src="assets/cat.png" alt="Catness" draggable="false"
+             onerror="this.style.display='none';document.getElementById('catFallback').style.display='block'" />
+        <div id="catFallback" class="cat-fallback" style="display:none">🐱</div>
+      </button>
+    </main>
+
+    <!-- Энергия + буст -->
+    <footer class="energy-bar">
+      <div class="energy">
+        <span class="energy-icon">⚡</span>
+        <span id="energyCurrent">1000</span> / <span id="energyMax">1000</span>
+      </div>
+      <button class="boost-btn" id="boostBtn">🚀 Буст</button>
+    </footer>
+
+    <!-- Нижняя навигация -->
+    <nav class="navbar">
+      <button class="nav-item active" data-tab="exchange"><span class="nav-emoji">🪙</span><span>Биржа</span></button>
+      <button class="nav-item" data-tab="cards"><span class="nav-emoji">📈</span><span>Карточки</span></button>
+      <button class="nav-item" data-tab="friends"><span class="nav-emoji">👬</span><span>Друзья</span></button>
+      <button class="nav-item" data-tab="earn"><span class="nav-emoji">✅</span><span>Задания</span></button>
+    </nav>
+  </div>
+
+  <!-- Модальные вкладки -->
+  <div class="sheet" id="sheet">
+    <div class="sheet-backdrop" id="sheetBackdrop"></div>
+    <div class="sheet-content">
+      <button class="sheet-close" id="sheetClose">✕</button>
+      <div id="sheetBody"></div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+# Исходник до обработки (не нужен для сайта)
+cat-original.png.webp
+cat-original.png
+
+# Служебное
+.DS_Store
+Thumbs.db
