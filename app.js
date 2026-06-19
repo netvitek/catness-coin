@@ -6,6 +6,12 @@ const haptic = (type = 'light') => {
   try { tg?.HapticFeedback?.impactOccurred(type); } catch (e) {}
 };
 
+// Открыть ссылку Telegram (канал) правильным способом
+function openTg(url) {
+  if (tg?.openTelegramLink) tg.openTelegramLink(url);
+  else window.open(url, '_blank');
+}
+
 // ---- Лиги (по балансу) ----
 const LEAGUES = [
   { name: 'Бронза',    emoji: '🥉', min: 0 },
@@ -28,12 +34,14 @@ const CARDS = [
   { id: 'token',   name: 'Листинг $CATS',    emoji: '💠', baseProfit: 30000,baseCost: 1000000 },
 ];
 
-// ---- Задания ----
+// ---- Канал (обязательная подписка для игры) ----
+const CHANNEL_URL = 'https://t.me/Catness_Coin';
+
+// ---- Задания (обновляются каждые сутки) ----
 const TASKS = [
-  { id: 't_sub',   title: 'Подписаться на канал', sub: 'Catness News', emoji: '📢', reward: 5000 },
-  { id: 't_chat',  title: 'Вступить в чат',       sub: 'Сообщество',   emoji: '💬', reward: 5000 },
-  { id: 't_x',     title: 'Подписаться в X',      sub: '@CatnessCoin', emoji: '🐦', reward: 3000 },
-  { id: 't_daily', title: 'Ежедневный заход',     sub: 'Заходи каждый день', emoji: '📅', reward: 1000 },
+  { id: 't_daily',   title: 'Ежедневный бонус',  sub: 'Заходи каждый день',   emoji: '📅', reward: 1000, kind: 'daily' },
+  { id: 't_taps',    title: 'Сделать 500 тапов', sub: 'Натапай за сегодня',   emoji: '👆', reward: 2000, kind: 'goal', goal: 500 },
+  { id: 't_upgrade', title: 'Прокачать карточку',sub: 'Купи любой апгрейд',   emoji: '📈', reward: 3000, kind: 'upgrade' },
 ];
 
 // ---- Состояние по умолчанию ----
@@ -45,7 +53,11 @@ const DEFAULT_STATE = {
   energy: 1000,
   energyRegen: 1,        // за секунду
   cards: {},             // id -> level
-  tasksDone: {},         // id -> true
+  tasksDone: {},         // id -> true (сбрасывается каждые сутки)
+  tasksDay: '',          // дата последнего сброса заданий (YYYY-MM-DD)
+  tapsToday: 0,          // тапов за сегодня (для задания)
+  upgradedToday: false,  // качал ли карточку сегодня
+  subscribed: false,     // подписан на канал (обязательно для игры)
   boostUntil: 0,
   lastSeen: Date.now(),
 };
@@ -62,6 +74,18 @@ function load() {
 function save() {
   state.lastSeen = Date.now();
   localStorage.setItem('catness_save', JSON.stringify(state));
+}
+
+// Сброс заданий раз в сутки
+function todayStr() { return new Date().toISOString().slice(0, 10); }
+function checkDailyReset() {
+  const t = todayStr();
+  if (state.tasksDay !== t) {
+    state.tasksDay = t;
+    state.tasksDone = {};
+    state.tapsToday = 0;
+    state.upgradedToday = false;
+  }
 }
 
 // ---- Расчёты ----
@@ -145,6 +169,9 @@ function render() {
 
 // ===== Тап =====
 function doTap(clientX, clientY) {
+  // Без подписки на канал монеты не капают
+  if (!state.subscribed) { openGate(); return; }
+
   const cost = 1; // 1 энергия за тап
   if (state.energy < cost) { toast('⚡ Энергия кончилась!'); return; }
 
@@ -152,6 +179,7 @@ function doTap(clientX, clientY) {
   state.energy -= cost;
   state.balance += gain;
   state.totalEarned += gain;
+  state.tapsToday = (state.tapsToday || 0) + 1;
 
   haptic('light');
   floatNumber(clientX, clientY, '+' + gain);
@@ -212,6 +240,7 @@ function setActiveNav(btn) {
 }
 function openSheet() { sheet.classList.add('open'); }
 function closeSheet() {
+  if (gateActive) return; // нельзя закрыть, пока не подписался
   sheet.classList.remove('open');
   setActiveNav(document.querySelector('.nav-item[data-tab="exchange"]'));
 }
@@ -255,6 +284,7 @@ function buyCard(id) {
   if (state.balance < cost) { toast('Недостаточно монет'); haptic('rigid'); return; }
   state.balance -= cost;
   state.cards[id] = cardLevel(id) + 1;
+  state.upgradedToday = true;
   haptic('medium');
   toast(`${card.emoji} ${card.name} → ур. ${cardLevel(id)}`);
   render();
@@ -279,18 +309,37 @@ function renderFriends() {
 }
 
 function renderEarn() {
-  let html = `<h2>✅ Задания</h2><p class="subtitle">Выполняй задания — получай монеты</p>`;
+  let html = `<h2>✅ Задания</h2><p class="subtitle">Обновляются каждые сутки</p>`;
+
+  // Обязательная подписка на канал (выполнена, раз игра открыта)
+  html += `
+    <div class="list-item">
+      <span class="li-emoji">📢</span>
+      <div class="li-text">
+        <div class="li-title">Канал Catness Coin</div>
+        <div class="li-sub">Ты подписан ✓</div>
+      </div>
+      <button class="li-action done" disabled>✓ Готово</button>
+    </div>`;
+
   TASKS.forEach((t) => {
     const done = state.tasksDone[t.id];
+    let sub = t.sub, disabled = '';
+    if (t.kind === 'goal') {
+      const cur = Math.min(state.tapsToday || 0, t.goal);
+      sub = `Прогресс: ${cur}/${t.goal}`;
+      if (cur < t.goal) disabled = 'disabled';
+    }
+    if (t.kind === 'upgrade' && !state.upgradedToday) disabled = 'disabled';
     html += `
       <div class="list-item">
         <span class="li-emoji">${t.emoji}</span>
         <div class="li-text">
           <div class="li-title">${t.title}</div>
-          <div class="li-sub">${t.sub} · +${fmt(t.reward)}</div>
+          <div class="li-sub">${sub} · +${fmt(t.reward)}</div>
         </div>
-        <button class="li-action ${done ? 'done' : ''}" data-task="${t.id}" ${done ? 'disabled' : ''}>
-          ${done ? '✓ Готово' : 'Выполнить'}</button>
+        <button class="li-action ${done ? 'done' : ''}" data-task="${t.id}" ${done ? 'disabled' : disabled}>
+          ${done ? '✓ Готово' : 'Забрать'}</button>
       </div>`;
   });
   sheetBody.innerHTML = html;
@@ -302,6 +351,13 @@ function renderEarn() {
 function completeTask(id) {
   if (state.tasksDone[id]) return;
   const t = TASKS.find((x) => x.id === id);
+  // Проверка условий
+  if (t.kind === 'goal' && (state.tapsToday || 0) < t.goal) {
+    toast(`Натапай ещё ${t.goal - (state.tapsToday || 0)}`); return;
+  }
+  if (t.kind === 'upgrade' && !state.upgradedToday) {
+    toast('Сначала прокачай любую карточку'); return;
+  }
   state.tasksDone[id] = true;
   state.balance += t.reward;
   state.totalEarned += t.reward;
@@ -310,6 +366,37 @@ function completeTask(id) {
   render();
   renderEarn();
   save();
+}
+
+// ===== Обязательная подписка на канал (без неё нет монет) =====
+let gateActive = false;
+function openGate() {
+  gateActive = true;
+  $('#sheetClose').style.display = 'none';
+  sheetBody.innerHTML = `
+    <h2>📢 Один шаг до игры</h2>
+    <p class="subtitle">Подпишись на официальный канал Catness Coin — без подписки монеты не капают.</p>
+    <div class="invite-banner"><b>+5 000 монет</b><p>за подписку на канал</p></div>
+    <button class="li-action" id="gateSub" style="width:100%;padding:14px;margin-bottom:10px">📢 Подписаться на канал</button>
+    <button class="li-action" id="gateCheck" style="width:100%;padding:14px;background:var(--green);color:#0f0f14;display:none">✓ Я подписался</button>`;
+  openSheet();
+  $('#gateSub').addEventListener('click', () => {
+    openTg(CHANNEL_URL);
+    $('#gateCheck').style.display = 'block';
+    haptic('light');
+  });
+  $('#gateCheck').addEventListener('click', () => {
+    state.subscribed = true;
+    state.balance += 5000;
+    state.totalEarned += 5000;
+    gateActive = false;
+    $('#sheetClose').style.display = '';
+    haptic('medium');
+    toast('+5 000 за подписку! 🎉');
+    closeSheet();
+    render();
+    save();
+  });
 }
 
 // ===== Тосты =====
@@ -326,6 +413,7 @@ function toast(msg) {
 // ===== Игровые тики =====
 // Регенерация энергии + пассивный доход
 setInterval(() => {
+  checkDailyReset();
   // энергия
   if (state.energy < state.energyMax) {
     state.energy = Math.min(state.energyMax, state.energy + state.energyRegen);
@@ -342,4 +430,6 @@ window.addEventListener('beforeunload', save);
 document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
 
 // Старт
+checkDailyReset();
 render();
+if (!state.subscribed) openGate();

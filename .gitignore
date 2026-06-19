@@ -2,6 +2,11 @@
 cat-original.png.webp
 cat-original.png
 
+# Токен бота — НИКОГДА не коммитим
+bot_token.txt
+
 # Служебное
 .DS_Store
 Thumbs.db
+__pycache__/
+assets/_check.png
