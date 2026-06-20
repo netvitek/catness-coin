@@ -40,13 +40,14 @@ html, body {
   gap: 12px;
   padding: 14px 0 6px;
 }
+.topbar > * { min-height: 52px; }
 .league {
   display: flex;
   align-items: center;
   gap: 10px;
   background: var(--bg-soft);
   padding: 8px 14px;
-  border-radius: 999px;
+  border-radius: 14px;
   cursor: pointer;
 }
 .league-emoji { font-size: 22px; }
@@ -240,24 +241,33 @@ html, body {
 }
 .invite-banner b { font-size: 16px; }
 .invite-banner p { font-size: 12px; opacity: .85; margin-top: 4px; }
-/* Компактный бейдж стрика в шапке */
-.topbar-right { display: flex; align-items: center; gap: 8px; }
-.streak-badge {
-  position: relative; flex: 0 0 auto;
-  background: none; border: none; cursor: pointer;
-  padding: 2px 4px; line-height: 1;
+/* Карточка «Ежедневная серия» на главной */
+.streak-card {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  border: none; cursor: pointer; text-align: left; color: var(--text);
+  background: linear-gradient(120deg, #241c2e, var(--bg-soft));
+  border-radius: 16px; padding: 11px 14px; margin: 8px 0 2px;
+  transition: box-shadow .25s, background .25s;
 }
-.sb-flame { font-size: 30px; display: block; }
-.sb-num {
+.streak-card.ready {
+  background: linear-gradient(120deg, rgba(245,197,66,.20), #241c2e);
+  box-shadow: 0 0 0 1.5px rgba(245,197,66,.45), 0 6px 18px rgba(245,197,66,.12);
+}
+.sc-icon { position: relative; font-size: 38px; line-height: 1; flex: 0 0 auto; }
+.sc-icon b {
   position: absolute; left: 0; right: 0; top: 58%; transform: translateY(-50%);
-  text-align: center; font-size: 12px; font-weight: 900; color: #fff;
-  text-shadow: 0 1px 2px rgba(0,0,0,.8);
+  text-align: center; font-size: 14px; font-weight: 900; color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,.85);
 }
-.streak-badge.ready { animation: streakPulse 1.4s ease-in-out infinite; }
-@keyframes streakPulse {
-  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 0 rgba(245,197,66,0)); }
-  50% { transform: scale(1.12); filter: drop-shadow(0 0 6px rgba(245,197,66,.8)); }
+.sc-mid { display: flex; flex-direction: column; flex: 1; gap: 2px; min-width: 0; }
+.sc-title { font-weight: 800; font-size: 15px; }
+.sc-sub { font-size: 12px; color: var(--text-dim); }
+.sc-cta {
+  flex: 0 0 auto; background: var(--gold); color: #15151c;
+  font-weight: 800; font-size: 13px; padding: 8px 15px; border-radius: 999px;
 }
+.streak-card.ready .sc-cta { animation: ctaPulse 1.5s ease-in-out infinite; }
+@keyframes ctaPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.06)} }
 
 /* Окно стрика — герой с огоньком */
 .streak-hero { text-align: center; margin: 6px 0 14px; }

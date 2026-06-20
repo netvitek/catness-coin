@@ -1,17 +1,22 @@
-// ===== Catness Coin — бот + проверка подписки + рефералы (Cloudflare Workers) =====
+// ===== Catness Coin — бот + подписка + рефералы + игроки/админка (Cloudflare Workers) =====
 // Маршруты:
-//   GET  /        -> "жив"
-//   POST /tg      -> webhook Telegram (/start, обработка реф-ссылок)
-//   POST /verify  -> проверка подписки на канал
-//   POST /claim   -> забрать накопленные реф-награды (+ счётчик друзей)
+//   GET  /            -> "жив"
+//   POST /tg          -> webhook Telegram (/start, реф-ссылки)
+//   POST /verify      -> проверка подписки на канал
+//   POST /claim       -> забрать реф-награды
+//   POST /sync        -> регистрация игрока + бан-статус + начисления от админа
+//   POST /admin/users -> список игроков (нужен пароль)
+//   POST /admin/grant -> начислить монеты игроку
+//   POST /admin/ban   -> забанить / разбанить
+//   POST /admin/raffle-> розыгрыш приза среди игроков
 //
-// Секреты воркера: BOT_TOKEN (обяз.), WEBHOOK_SECRET, CHANNEL (по умолч. @Catness_Coin)
-// KV-биндинг: REF (хранит рефералов)
+// Секреты: BOT_TOKEN, WEBHOOK_SECRET, CHANNEL, ADMIN_PASSWORD
+// KV-биндинг: REF
 
 const GAME_URL = 'https://netvitek.github.io/catness-coin/';
 const CHANNEL_URL = 'https://t.me/Catness_Coin';
 const DEFAULT_CHANNEL = '@Catness_Coin';
-const REF_REWARD = 10000; // монет за каждого приглашённого друга
+const REF_REWARD = 10000;
 
 const WELCOME =
   'Котость пробудилась! 🐱\n\n' +
@@ -40,6 +45,8 @@ export default {
 
     if (url.pathname === '/verify') return handleVerify(request, env);
     if (url.pathname === '/claim') return handleClaim(request, env);
+    if (url.pathname === '/sync') return handleSync(request, env);
+    if (url.pathname.startsWith('/admin/')) return handleAdmin(url.pathname, request, env);
 
     // ---- Webhook Telegram ----
     if (env.WEBHOOK_SECRET) {
@@ -61,16 +68,16 @@ export default {
   },
 };
 
-// Засчитываем реферала, когда новый юзер пришёл по ссылке ?start=ref_<id>
+// ---------- Рефералы ----------
 async function handleStartRef(env, msg, text) {
   if (!env.REF || !msg.from) return;
   const parts = text.split(/\s+/);
   if (parts.length < 2 || !parts[1].startsWith('ref_')) return;
   const refId = parts[1].slice(4).replace(/[^0-9]/g, '');
   const newUser = String(msg.from.id);
-  if (!refId || refId === newUser) return;            // нет id или сам себя
+  if (!refId || refId === newUser) return;
   const invKey = 'inv:' + newUser;
-  if (await env.REF.get(invKey)) return;              // этого юзера уже считали
+  if (await env.REF.get(invKey)) return;
   await env.REF.put(invKey, refId);
   const refKey = 'ref:' + refId;
   let data = { count: 0, pending: 0 };
@@ -98,14 +105,93 @@ async function handleClaim(request, env) {
   let data = { count: 0, pending: 0 };
   if (env.REF) {
     try { const raw = await env.REF.get('ref:' + user.id); if (raw) data = JSON.parse(raw); } catch (_) {}
-    if (data.pending > 0) {
-      await env.REF.put('ref:' + user.id, JSON.stringify({ count: data.count, pending: 0 }));
-    }
+    if (data.pending > 0) await env.REF.put('ref:' + user.id, JSON.stringify({ count: data.count, pending: 0 }));
   }
   return json({ ok: true, count: data.count, credited: data.pending });
 }
 
-// Проверяем подпись initData (нельзя подделать свой id)
+// ---------- Регистрация игрока + бан + начисления ----------
+async function handleSync(request, env) {
+  let body = {};
+  try { body = await request.json(); } catch (_) {}
+  const user = await validateInitData(body.initData || '', env.BOT_TOKEN);
+  if (!user || !user.id) return json({ ok: false, error: 'bad_init_data' });
+  if (!env.REF) return json({ ok: true, banned: false, credited: 0 });
+
+  const key = 'user:' + user.id;
+  let u = {};
+  try { const raw = await env.REF.get(key); if (raw) u = JSON.parse(raw); } catch (_) {}
+  const now = Date.now();
+  u.id = String(user.id);
+  u.name = [user.first_name, user.last_name].filter(Boolean).join(' ');
+  u.username = user.username || '';
+  if (typeof body.balance === 'number') u.balance = Math.floor(body.balance);
+  if (!u.firstSeen) u.firstSeen = now;
+  u.lastSeen = now;
+  const credited = u.pendingGrant || 0;
+  if (credited > 0) u.pendingGrant = 0;
+  await env.REF.put(key, JSON.stringify(u));
+  return json({ ok: true, banned: !!u.banned, credited });
+}
+
+// ---------- Админка ----------
+async function handleAdmin(path, request, env) {
+  let body = {};
+  try { body = await request.json(); } catch (_) {}
+  if (!env.ADMIN_PASSWORD || body.pass !== env.ADMIN_PASSWORD) return json({ ok: false, error: 'forbidden' });
+  if (!env.REF) return json({ ok: false, error: 'no_kv' });
+
+  if (path === '/admin/users') return json({ ok: true, users: await adminUsers(env) });
+  if (path === '/admin/grant') return json({ ok: await adminGrant(env, String(body.userId), Math.floor(body.amount || 0)) });
+  if (path === '/admin/ban') return json({ ok: await adminBan(env, String(body.userId), !!body.banned) });
+  if (path === '/admin/raffle') return json({ ok: true, winners: await adminRaffle(env, parseInt(body.count || 1, 10), Math.floor(body.prize || 0)) });
+  return json({ ok: false, error: 'unknown' });
+}
+
+async function adminUsers(env) {
+  const out = [];
+  let cursor;
+  do {
+    const list = await env.REF.list({ prefix: 'user:', cursor, limit: 1000 });
+    for (const k of list.keys) {
+      const raw = await env.REF.get(k.name);
+      if (raw) { try { out.push(JSON.parse(raw)); } catch (_) {} }
+    }
+    cursor = list.list_complete ? null : list.cursor;
+  } while (cursor && out.length < 2000);
+  out.sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0));
+  return out;
+}
+async function adminGrant(env, userId, amount) {
+  const raw = await env.REF.get('user:' + userId);
+  if (!raw) return false;
+  const u = JSON.parse(raw);
+  u.pendingGrant = (u.pendingGrant || 0) + amount;
+  await env.REF.put('user:' + userId, JSON.stringify(u));
+  return true;
+}
+async function adminBan(env, userId, banned) {
+  const raw = await env.REF.get('user:' + userId);
+  if (!raw) return false;
+  const u = JSON.parse(raw);
+  u.banned = banned;
+  await env.REF.put('user:' + userId, JSON.stringify(u));
+  return true;
+}
+async function adminRaffle(env, count, prize) {
+  const users = (await adminUsers(env)).filter((u) => !u.banned);
+  for (let i = users.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [users[i], users[j]] = [users[j], users[i]];
+  }
+  const winners = users.slice(0, Math.max(0, count));
+  for (const w of winners) {
+    if (prize > 0) await adminGrant(env, w.id, prize);
+  }
+  return winners.map((w) => ({ id: w.id, name: w.name, username: w.username }));
+}
+
+// ---------- Утилиты ----------
 async function validateInitData(initData, botToken) {
   if (!initData) return null;
   const params = new URLSearchParams(initData);
@@ -121,7 +207,6 @@ async function validateInitData(initData, botToken) {
   if (!userStr) return null;
   try { return JSON.parse(userStr); } catch (_) { return null; }
 }
-
 async function isSubscribed(token, chatId, userId) {
   try {
     const r = await fetch(`https://api.telegram.org/bot${token}/getChatMember?chat_id=${encodeURIComponent(chatId)}&user_id=${userId}`);
@@ -130,7 +215,6 @@ async function isSubscribed(token, chatId, userId) {
     return ['creator', 'administrator', 'member'].includes(j.result.status);
   } catch (_) { return false; }
 }
-
 async function hmac(keyBytes, msgBytes) {
   const key = await crypto.subtle.importKey('raw', keyBytes, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
   return new Uint8Array(await crypto.subtle.sign('HMAC', key, msgBytes));

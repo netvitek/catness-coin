@@ -6,6 +6,7 @@ cat-original.png
 bot_token.txt
 webhook_secret.txt
 kv_id.txt
+admin_password.txt
 
 # Служебное
 .DS_Store

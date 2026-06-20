@@ -75,6 +75,39 @@ async function claimReferrals() {
   } catch (e) {}
 }
 
+// Регистрация игрока на сервере: бан-статус + начисления от админа
+let isBanned = false;
+async function syncServer() {
+  if (!WORKER_URL || !tg?.initData) return;
+  try {
+    const r = await fetch(WORKER_URL + '/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ initData: tg.initData, balance: Math.floor(state.balance) }),
+    });
+    const j = await r.json();
+    if (!j || !j.ok) return;
+    isBanned = !!j.banned;
+    if (j.credited > 0) {
+      state.balance += j.credited;
+      state.totalEarned += j.credited;
+      setTimeout(() => toast(`🎁 Начислено админом: +${fmt(j.credited)}`), 1200);
+    }
+  } catch (e) {}
+}
+
+// Экран блокировки
+function openBanned() {
+  gateActive = true;
+  $('#sheetClose').style.display = 'none';
+  sheetBody.innerHTML = `
+    <h2>🚫 Доступ заблокирован</h2>
+    <p class="subtitle">Аккаунт заблокирован за нарушение правил (нечестная игра).</p>
+    <button class="li-action" id="banContact" style="width:100%;padding:14px">📢 Наш канал</button>`;
+  openSheet();
+  $('#banContact')?.addEventListener('click', () => openTg(CHANNEL_URL));
+}
+
 // ---- Задания (обновляются каждые сутки) ----
 const TASKS = [
   { id: 't_daily',   title: 'Ежедневный бонус',  sub: 'Заходи каждый день',   emoji: '📅', reward: 1000, kind: 'daily' },
@@ -237,11 +270,18 @@ function updateStreakWidget() {
   const st = streakStatus();
   const cur = st.claimable ? Math.max(0, st.day - 1) : state.streakDay;
   numEl.textContent = cur;
+  const subEl = $('#streakSub');
+  if (subEl) subEl.textContent = st.claimable
+    ? `День ${st.day} · награда готова`
+    : `Серия ${state.streakDay} ${plur(state.streakDay, 'день', 'дня', 'дней')} · приходи завтра`;
+  const cta = $('#streakCta');
+  if (cta) cta.style.display = st.claimable ? '' : 'none';
   $('#streakWidget')?.classList.toggle('ready', st.claimable);
 }
 
 // ===== Тап =====
 function doTap(clientX, clientY) {
+  if (isBanned) return; // забаненный игрок не зарабатывает
   // Без подписки на канал монеты не капают
   if (!state.subscribed) { openGate(); return; }
 
@@ -706,6 +746,9 @@ async function init() {
 
   // Перепроверяем подписку на канал на каждом запуске (если воркер настроен).
   // Отписался — снова блокируем игру.
+  await syncServer(); // регистрация + бан-статус + начисления от админа
+  if (isBanned) { render(); openBanned(); return; } // забанен — игра недоступна
+
   const sub = await verifySubscription();
   if (sub === true) state.subscribed = true;
   else if (sub === false) state.subscribed = false;
