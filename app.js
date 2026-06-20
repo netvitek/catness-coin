@@ -99,7 +99,8 @@ const DEFAULT_STATE = {
   subBonusGiven: false,  // бонус за подписку уже выдан (чтобы не фармили)
   refCount: 0,           // сколько друзей приглашено (с сервера)
   firstSeen: 0,          // дата первого захода (для профиля)
-  boostUntil: 0,
+  boostUntil: 0,         // до какого времени активен x5
+  boostCdUntil: 0,       // до какого времени кулдаун (нельзя жать)
   lastSeen: Date.now(),
 };
 
@@ -273,13 +274,52 @@ tapButton.addEventListener('pointerdown', () => {
   if (img) { img.style.transform = 'scale(.95)'; setTimeout(() => img.style.transform = '', 80); }
 });
 
-// ===== Буст =====
+// ===== Буст (x5 на 20 сек, кулдаун 30 сек) =====
+const BOOST_DURATION = 20000; // длительность эффекта
+const BOOST_COOLDOWN = 30000; // кулдаун между использованиями
+
 $('#boostBtn').addEventListener('click', () => {
-  if (Date.now() < state.boostUntil) { toast('🚀 Буст уже активен!'); return; }
-  state.boostUntil = Date.now() + 20000; // 20 сек x5
+  const now = Date.now();
+  if (now < state.boostCdUntil) {
+    const left = Math.ceil((state.boostCdUntil - now) / 1000);
+    toast(`⏳ Попробуйте через ${left} с`);
+    haptic('rigid');
+    return;
+  }
+  state.boostUntil = now + BOOST_DURATION;
+  state.boostCdUntil = now + BOOST_COOLDOWN;
   toast('🚀 Буст x5 на 20 секунд!');
   haptic('medium');
+  updateBoostUI();
+  save();
 });
+
+// Живой таймер над кнопкой буста
+function updateBoostUI() {
+  const btn = $('#boostBtn');
+  const cd = $('#boostCd');
+  if (!btn || !cd) return;
+  const now = Date.now();
+  if (now < state.boostUntil) {
+    // эффект активен
+    const left = Math.ceil((state.boostUntil - now) / 1000);
+    btn.textContent = `🚀 x5 · ${left}с`;
+    btn.classList.add('cooling');
+    cd.classList.remove('show');
+  } else if (now < state.boostCdUntil) {
+    // кулдаун — показываем подсказку
+    const left = Math.ceil((state.boostCdUntil - now) / 1000);
+    btn.textContent = '🚀 Буст';
+    btn.classList.add('cooling');
+    cd.textContent = `Попробуйте через ${left} с`;
+    cd.classList.add('show');
+  } else {
+    // готов
+    btn.textContent = '🚀 Буст';
+    btn.classList.remove('cooling');
+    cd.classList.remove('show');
+  }
+}
 
 // ===== Вкладки / шторка =====
 const sheet = $('#sheet');
@@ -535,6 +575,7 @@ function startLoops() {
     const inc = profitPerSec();
     if (inc > 0) { state.balance += inc; state.totalEarned += inc; }
     render();
+    updateBoostUI();
   }, 1000);
 
   // Автосохранение
@@ -559,6 +600,7 @@ async function init() {
   await claimReferrals(); // начислить награды за приглашённых друзей
 
   render();
+  updateBoostUI();
   if (!state.subscribed) openGate();
   startLoops();
   save();
