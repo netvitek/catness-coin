@@ -237,8 +237,6 @@ function updateStreakWidget() {
   const st = streakStatus();
   const cur = st.claimable ? Math.max(0, st.day - 1) : state.streakDay;
   numEl.textContent = cur;
-  const subEl = $('#streakSub');
-  if (subEl) subEl.textContent = st.claimable ? 'Забери награду!' : 'Возвращайся завтра';
   $('#streakWidget')?.classList.toggle('ready', st.claimable);
 }
 

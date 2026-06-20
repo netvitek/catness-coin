@@ -19,21 +19,17 @@
           <div class="league-progress"><div class="league-progress-fill" id="leagueProgress"></div></div>
         </div>
       </div>
-      <div class="profit-hour">
-        <span class="profit-label">прибыль в час</span>
-        <span class="profit-value"><i class="coin-mini"></i><span id="profitPerHour">0</span></span>
+      <div class="topbar-right">
+        <div class="profit-hour">
+          <span class="profit-label">прибыль в час</span>
+          <span class="profit-value"><i class="coin-mini"></i><span id="profitPerHour">0</span></span>
+        </div>
+        <button class="streak-badge" id="streakWidget" aria-label="Стрик">
+          <span class="sb-flame">🔥</span>
+          <span class="sb-num" id="streakNum">0</span>
+        </button>
       </div>
     </header>
-
-    <!-- Виджет стрика -->
-    <button class="streak-widget" id="streakWidget">
-      <span class="streak-flame">🔥<b id="streakNum">0</b></span>
-      <span class="streak-text">
-        <span class="streak-title">Стрик</span>
-        <small id="streakSub">Забери награду</small>
-      </span>
-      <span class="streak-arrow">›</span>
-    </button>
 
     <!-- Баланс -->
     <div class="balance">
