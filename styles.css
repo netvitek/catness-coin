@@ -240,6 +240,25 @@ html, body {
 }
 .invite-banner b { font-size: 16px; }
 .invite-banner p { font-size: 12px; opacity: .85; margin-top: 4px; }
+/* Стрик — лента дней */
+.streak-strip {
+  display: flex; gap: 10px; overflow-x: auto;
+  padding: 4px 2px 8px; margin-top: 10px;
+  -webkit-overflow-scrolling: touch;
+}
+.streak-day {
+  flex: 0 0 auto; width: 92px;
+  background: var(--bg-card); border-radius: 14px;
+  padding: 14px 8px; text-align: center;
+  border: 2px solid transparent;
+}
+.streak-day.current {
+  border-color: var(--gold);
+  background: linear-gradient(160deg, rgba(245,197,66,.18), var(--bg-card));
+}
+.sd-day { font-size: 13px; color: var(--text-dim); font-weight: 600; margin-bottom: 8px; }
+.sd-coin { display: flex; align-items: center; justify-content: center; gap: 4px; font-weight: 800; font-size: 14px; }
+
 /* Профиль */
 .pf-head { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
 .pf-avatar {

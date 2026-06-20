@@ -98,6 +98,8 @@ const DEFAULT_STATE = {
   subscribed: false,     // подписан на канал (обязательно для игры)
   subBonusGiven: false,  // бонус за подписку уже выдан (чтобы не фармили)
   refCount: 0,           // сколько друзей приглашено (с сервера)
+  streakDay: 0,          // текущий день стрика (0 = ещё не забирал)
+  streakLastDay: '',     // дата последнего забранного дня (YYYY-MM-DD)
   firstSeen: 0,          // дата первого захода (для профиля)
   boostUntil: 0,         // до какого времени активен x5
   boostCdUntil: 0,       // до какого времени кулдаун (нельзя жать)
@@ -321,6 +323,75 @@ function updateBoostUI() {
   }
 }
 
+// ===== Ежедневный стрик (день 1..1000, награда растёт; пропуск дня — сброс) =====
+const STREAK_MAX = 1000;
+function streakReward(day) {
+  // с каждым днём больше: линейный рост + ускорение
+  return 1000 * day + day * day * 50;
+}
+function dayOffsetStr(offset) {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() + offset);
+  return d.toISOString().slice(0, 10);
+}
+// Какой день можно забрать прямо сейчас
+function streakStatus() {
+  const today = todayStr();
+  if (state.streakLastDay === today) return { claimable: false, day: state.streakDay };
+  const day = (state.streakLastDay === dayOffsetStr(-1))
+    ? Math.min((state.streakDay || 0) + 1, STREAK_MAX) // забирал вчера — продолжаем
+    : 1;                                               // пропустил день / первый раз — с 1
+  return { claimable: true, day };
+}
+function claimStreak() {
+  const st = streakStatus();
+  if (!st.claimable) return;
+  const reward = streakReward(st.day);
+  state.streakDay = st.day;
+  state.streakLastDay = todayStr();
+  state.balance += reward;
+  state.totalEarned += reward;
+  haptic('medium');
+  toast(`🎁 День ${st.day}: +${fmt(reward)}!`);
+  closeSheet();
+  render();
+  save();
+}
+function maybeShowStreak() {
+  if (state.subscribed && streakStatus().claimable) openStreak();
+}
+function openStreak() {
+  const st = streakStatus();
+  const day = st.day;
+  let strip = '';
+  const start = Math.max(1, day);
+  for (let d = start; d < start + 5 && d <= STREAK_MAX; d++) {
+    strip += `
+      <div class="streak-day ${d === day ? 'current' : ''}">
+        <div class="sd-day">День ${d}</div>
+        <div class="sd-coin"><i class="coin-mini"></i>${fmt(streakReward(d))}</div>
+      </div>`;
+  }
+  if (st.claimable) {
+    sheetBody.innerHTML = `
+      <h2>📅 Ежедневная награда</h2>
+      <p class="subtitle">Заходи каждый день — награда растёт. Пропустишь день — стрик сгорит!</p>
+      <div class="streak-strip">${strip}</div>
+      <button class="li-action" id="streakClaim" style="width:100%;padding:15px;margin-top:16px">Забрать День ${day} · +${fmt(streakReward(day))}</button>`;
+    openSheet();
+    $('#streakClaim').addEventListener('click', claimStreak);
+  } else {
+    const next = Math.min((state.streakDay || 0) + 1, STREAK_MAX);
+    sheetBody.innerHTML = `
+      <h2>📅 Ежедневная награда</h2>
+      <p class="subtitle">Награда за сегодня уже забрана 🎉</p>
+      <div class="pf-row"><span>Текущий стрик</span><b>${state.streakDay} дн.</b></div>
+      <div class="pf-row"><span>Завтра — День ${next}</span><b>+${fmt(streakReward(next))}</b></div>
+      <p class="subtitle" style="margin-top:14px;text-align:center">Возвращайся завтра, чтобы не потерять стрик!</p>`;
+    openSheet();
+  }
+}
+
 // ===== Вкладки / шторка =====
 const sheet = $('#sheet');
 const sheetBody = $('#sheetBody');
@@ -433,7 +504,11 @@ function renderProfile() {
     <p class="subtitle">За каждого приглашённого — <b>+10 000 монет</b></p>
     <div class="pf-row"><span>Приглашено друзей</span><b>${state.refCount || 0}</b></div>
     <button class="li-action" id="refShare" style="width:100%;padding:14px;margin-top:12px">🚀 Пригласить друга</button>
-    <button class="li-action" id="refCopy" style="width:100%;padding:14px;margin-top:8px;background:var(--bg-card);color:var(--text)">📋 Скопировать ссылку</button>`;
+    <button class="li-action" id="refCopy" style="width:100%;padding:14px;margin-top:8px;background:var(--bg-card);color:var(--text)">📋 Скопировать ссылку</button>
+
+    <h2 style="margin-top:22px">📅 Стрик</h2>
+    <div class="pf-row"><span>Текущий стрик</span><b>${state.streakDay || 0} дн.</b></div>
+    <button class="li-action" id="openStreakBtn" style="width:100%;padding:14px;margin-top:12px">🎁 Ежедневная награда</button>`;
 
   const refLink = `https://t.me/CatnessCoin_bot?start=ref_${u?.id || ''}`;
   const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(refLink)}&text=${encodeURIComponent('Заходи в Catness Coin — тапай кота и зарабатывай монеты! 🐱')}`;
@@ -442,6 +517,7 @@ function renderProfile() {
     navigator.clipboard?.writeText(refLink).then(() => toast('Ссылка скопирована!'), () => {});
     haptic('light');
   });
+  $('#openStreakBtn')?.addEventListener('click', () => { openStreak(); haptic('light'); });
 }
 
 function renderEarn() {
@@ -551,6 +627,7 @@ function grantAccess() {
   closeSheet();
   render();
   save();
+  setTimeout(maybeShowStreak, 400); // покажем дневную награду сразу после входа
 }
 
 // ===== Тосты =====
@@ -602,6 +679,7 @@ async function init() {
   render();
   updateBoostUI();
   if (!state.subscribed) openGate();
+  else maybeShowStreak();
   startLoops();
   save();
 }
