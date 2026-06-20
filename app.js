@@ -137,6 +137,7 @@ const DEFAULT_STATE = {
   subscribed: false,     // подписан на канал (обязательно для игры)
   subBonusGiven: false,  // бонус за подписку уже выдан (чтобы не фармили)
   refCount: 0,           // сколько друзей приглашено (с сервера)
+  tutorialDone: false,   // прошёл ли обучение
   firstSeen: 0,          // дата первого захода (для профиля)
   boostUntil: 0,         // до какого времени активен x5
   boostCdUntil: 0,       // до какого времени кулдаун (нельзя жать)
@@ -473,7 +474,9 @@ function renderProfile() {
     <p class="subtitle">За каждого приглашённого — <b>+10 000 монет</b></p>
     <div class="pf-row"><span>Приглашено друзей</span><b>${state.refCount || 0}</b></div>
     <button class="li-action" id="refShare" style="width:100%;padding:14px;margin-top:12px">🚀 Пригласить друга</button>
-    <button class="li-action" id="refCopy" style="width:100%;padding:14px;margin-top:8px;background:var(--bg-card);color:var(--text)">📋 Скопировать ссылку</button>`;
+    <button class="li-action" id="refCopy" style="width:100%;padding:14px;margin-top:8px;background:var(--bg-card);color:var(--text)">📋 Скопировать ссылку</button>
+
+    <button class="li-action" id="howToPlay" style="width:100%;padding:14px;margin-top:14px;background:var(--bg-card);color:var(--text)">❓ Как играть</button>`;
 
   const refLink = `https://t.me/CatnessCoin_bot?start=ref_${u?.id || ''}`;
   const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(refLink)}&text=${encodeURIComponent('Заходи в Catness Coin — тапай кота и зарабатывай монеты! 🐱')}`;
@@ -482,6 +485,7 @@ function renderProfile() {
     navigator.clipboard?.writeText(refLink).then(() => toast('Ссылка скопирована!'), () => {});
     haptic('light');
   });
+  $('#howToPlay')?.addEventListener('click', () => { openTutorial(); haptic('light'); });
 }
 
 function renderEarn() {
@@ -591,6 +595,39 @@ function grantAccess() {
   closeSheet();
   render();
   save();
+  if (!state.tutorialDone) setTimeout(openTutorial, 400);
+}
+
+// ===== Туториал для новых игроков =====
+const TUTORIAL = [
+  { emoji: '🐱', title: 'Добро пожаловать в Catness Coin!', text: 'Тапай кота — за каждый тап на баланс падают монеты. Чем больше тапаешь, тем богаче.' },
+  { emoji: '⚡', title: 'Энергия и буст', text: 'Каждый тап тратит энергию — она восстанавливается сама. Жми 🚀 Буст, чтобы ненадолго тапать в 5 раз сильнее.' },
+  { emoji: '📈', title: 'Пассивный доход', text: 'Во вкладке «Карточки» покупай улучшения — они приносят монеты даже когда ты офлайн.' },
+  { emoji: '👬', title: 'Друзья и задания', text: 'Зови друзей — +10 000 монет за каждого (вкладка «Профиль»). Выполняй задания. Погнали! 🚀' },
+];
+let tutStep = 0;
+function openTutorial() {
+  tutStep = 0;
+  renderTutorial();
+  openSheet();
+}
+function renderTutorial() {
+  const s = TUTORIAL[tutStep];
+  const last = tutStep === TUTORIAL.length - 1;
+  const dots = TUTORIAL.map((_, i) => `<span class="tut-dot ${i === tutStep ? 'on' : ''}"></span>`).join('');
+  sheetBody.innerHTML = `
+    <div class="tut">
+      <div class="tut-emoji">${s.emoji}</div>
+      <h2 style="text-align:center">${s.title}</h2>
+      <p class="subtitle" style="text-align:center">${s.text}</p>
+      <div class="tut-dots">${dots}</div>
+      <button class="li-action" id="tutNext" style="width:100%;padding:15px;margin-top:14px">${last ? 'Погнали! 🚀' : 'Далее'}</button>
+    </div>`;
+  $('#tutNext').addEventListener('click', () => {
+    haptic('light');
+    if (last) { state.tutorialDone = true; save(); closeSheet(); }
+    else { tutStep++; renderTutorial(); }
+  });
 }
 
 // ===== Тосты =====
@@ -645,6 +682,7 @@ async function init() {
   render();
   updateBoostUI();
   if (!state.subscribed) openGate();
+  else if (!state.tutorialDone) openTutorial();
   startLoops();
   save();
 }

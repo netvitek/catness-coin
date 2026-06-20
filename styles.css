@@ -242,6 +242,13 @@ html, body {
 .invite-banner b { font-size: 16px; }
 .invite-banner p { font-size: 12px; opacity: .85; margin-top: 4px; }
 
+/* Туториал */
+.tut { text-align: center; padding-top: 6px; }
+.tut-emoji { font-size: 72px; line-height: 1; margin: 8px 0 6px; }
+.tut-dots { display: flex; gap: 6px; justify-content: center; margin-top: 16px; }
+.tut-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--bg-card); transition: .2s; }
+.tut-dot.on { background: var(--gold); width: 22px; border-radius: 4px; }
+
 /* Профиль */
 .pf-head { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
 .pf-avatar {
