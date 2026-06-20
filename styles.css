@@ -240,24 +240,64 @@ html, body {
 }
 .invite-banner b { font-size: 16px; }
 .invite-banner p { font-size: 12px; opacity: .85; margin-top: 4px; }
-/* Стрик — лента дней */
+/* Виджет стрика на главной */
+.streak-widget {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  background: var(--bg-soft); border: none; border-radius: 16px;
+  padding: 10px 14px; margin: 4px 0 2px; cursor: pointer;
+  text-align: left; color: var(--text);
+}
+.streak-widget.ready {
+  background: linear-gradient(120deg, rgba(245,197,66,.22), var(--bg-soft));
+  box-shadow: 0 0 0 1.5px rgba(245,197,66,.5);
+}
+.streak-flame {
+  position: relative; font-size: 36px; line-height: 1; flex: 0 0 auto;
+}
+.streak-flame b {
+  position: absolute; left: 0; right: 0; top: 56%; transform: translateY(-50%);
+  text-align: center; font-size: 13px; font-weight: 800; color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,.7);
+}
+.streak-text { display: flex; flex-direction: column; flex: 1; }
+.streak-title { font-weight: 800; font-size: 16px; }
+.streak-text small { color: var(--text-dim); font-size: 12px; }
+.streak-arrow { font-size: 22px; color: var(--text-dim); }
+
+/* Окно стрика — герой с огоньком */
+.streak-hero { text-align: center; margin: 6px 0 14px; }
+.streak-flame-big { position: relative; font-size: 84px; line-height: 1; }
+.streak-flame-big b {
+  position: absolute; left: 0; right: 0; top: 58%; transform: translateY(-50%);
+  text-align: center; font-size: 30px; font-weight: 900; color: #fff;
+  text-shadow: 0 2px 4px rgba(0,0,0,.75);
+}
+.streak-hero-text { font-weight: 700; font-size: 16px; margin-top: 4px; }
+
+/* Лента дней */
 .streak-strip {
   display: flex; gap: 10px; overflow-x: auto;
-  padding: 4px 2px 8px; margin-top: 10px;
+  padding: 4px 2px 10px; margin-top: 10px;
   -webkit-overflow-scrolling: touch;
 }
 .streak-day {
-  flex: 0 0 auto; width: 92px;
-  background: var(--bg-card); border-radius: 14px;
-  padding: 14px 8px; text-align: center;
+  position: relative; flex: 0 0 auto; width: 96px;
+  background: var(--bg-card); border-radius: 16px;
+  padding: 12px 8px 14px; text-align: center;
   border: 2px solid transparent;
 }
 .streak-day.current {
   border-color: var(--gold);
-  background: linear-gradient(160deg, rgba(245,197,66,.18), var(--bg-card));
+  background: linear-gradient(160deg, rgba(245,197,66,.22), var(--bg-card));
 }
-.sd-day { font-size: 13px; color: var(--text-dim); font-weight: 600; margin-bottom: 8px; }
-.sd-coin { display: flex; align-items: center; justify-content: center; gap: 4px; font-weight: 800; font-size: 14px; }
+.streak-day.claimed { opacity: .5; }
+.sd-day { font-size: 13px; color: var(--text-dim); font-weight: 700; margin-bottom: 6px; }
+.sd-bigcoin { font-size: 38px; line-height: 1; margin: 2px 0 6px; }
+.sd-coin { font-weight: 800; font-size: 14px; }
+.sd-check {
+  position: absolute; top: 6px; right: 8px;
+  color: var(--green); font-weight: 900; font-size: 15px;
+}
 
 /* Профиль */
 .pf-head { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
