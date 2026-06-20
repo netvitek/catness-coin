@@ -119,18 +119,26 @@ async function handleSync(request, env) {
   if (!env.REF) return json({ ok: true, banned: false, credited: 0 });
 
   const key = 'user:' + user.id;
-  let u = {};
+  let u = null;
   try { const raw = await env.REF.get(key); if (raw) u = JSON.parse(raw); } catch (_) {}
   const now = Date.now();
-  u.id = String(user.id);
-  u.name = [user.first_name, user.last_name].filter(Boolean).join(' ');
-  u.username = user.username || '';
-  if (typeof body.balance === 'number') u.balance = Math.floor(body.balance);
-  if (!u.firstSeen) u.firstSeen = now;
-  u.lastSeen = now;
+  const isNew = !u;
+  if (!u) u = {};
   const credited = u.pendingGrant || 0;
-  if (credited > 0) u.pendingGrant = 0;
-  await env.REF.put(key, JSON.stringify(u));
+
+  // Пишем в KV только когда реально нужно — бережём лимит записей:
+  // новый игрок / есть начисление / прошло >2ч с прошлой записи.
+  const stale = !u.lastSeen || (now - u.lastSeen) > 2 * 3600 * 1000;
+  if (isNew || credited > 0 || stale) {
+    u.id = String(user.id);
+    u.name = [user.first_name, user.last_name].filter(Boolean).join(' ');
+    u.username = user.username || '';
+    if (typeof body.balance === 'number') u.balance = Math.floor(body.balance);
+    if (!u.firstSeen) u.firstSeen = now;
+    u.lastSeen = now;
+    if (credited > 0) u.pendingGrant = 0;
+    await env.REF.put(key, JSON.stringify(u));
+  }
   return json({ ok: true, banned: !!u.banned, credited });
 }
 
