@@ -37,8 +37,7 @@ const CARDS = [
 // ---- Канал (обязательная подписка для игры) ----
 const CHANNEL_URL = 'https://t.me/Catness_Coin';
 // Адрес воркера Cloudflare для настоящей проверки подписки.
-// Пока пусто — проверка «на доверии»; после деплоя сюда впишется https://...workers.dev
-const WORKER_URL = '';
+const WORKER_URL = 'https://catness-bot.catness-edcaw.workers.dev';
 
 // Спрашиваем у сервера, реально ли человек подписан на канал.
 // Возвращает true / false, либо null если проверка недоступна (воркер не настроен).
