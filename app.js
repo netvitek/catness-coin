@@ -55,6 +55,26 @@ async function verifySubscription() {
   } catch (e) { return null; }
 }
 
+// Забираем накопленные награды за приглашённых друзей (+10 000 за каждого)
+async function claimReferrals() {
+  if (!WORKER_URL || !tg?.initData) return;
+  try {
+    const r = await fetch(WORKER_URL + '/claim', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ initData: tg.initData }),
+    });
+    const j = await r.json();
+    if (!j || !j.ok) return;
+    state.refCount = j.count || 0;
+    if (j.credited > 0) {
+      state.balance += j.credited;
+      state.totalEarned += j.credited;
+      setTimeout(() => toast(`👬 +${fmt(j.credited)} за друзей!`), 900);
+    }
+  } catch (e) {}
+}
+
 // ---- Задания (обновляются каждые сутки) ----
 const TASKS = [
   { id: 't_daily',   title: 'Ежедневный бонус',  sub: 'Заходи каждый день',   emoji: '📅', reward: 1000, kind: 'daily' },
@@ -77,6 +97,7 @@ const DEFAULT_STATE = {
   upgradedToday: false,  // качал ли карточку сегодня
   subscribed: false,     // подписан на канал (обязательно для игры)
   subBonusGiven: false,  // бонус за подписку уже выдан (чтобы не фармили)
+  refCount: 0,           // сколько друзей приглашено (с сервера)
   firstSeen: 0,          // дата первого захода (для профиля)
   boostUntil: 0,
   lastSeen: Date.now(),
@@ -269,7 +290,6 @@ navItems.forEach((btn) => {
   btn.addEventListener('click', () => {
     const tab = btn.dataset.tab;
     if (tab === 'exchange') { closeSheet(); setActiveNav(btn); return; }
-    if (tab === 'channel') { openTg(CHANNEL_URL); haptic('light'); return; } // просто ссылка на канал
     setActiveNav(btn);
     openTab(tab);
   });
@@ -367,7 +387,21 @@ function renderProfile() {
     <div class="pf-row"><span>Лига</span><b>${lg.emoji} ${lg.name}</b></div>
     <div class="pf-row"><span>Баланс</span><b>${fmt(state.balance)}</b></div>
     <div class="pf-row"><span>Прибыль в час</span><b>${fmt(profitPerHour())}</b></div>
-    <div class="pf-row"><span>Всего заработано</span><b>${fmt(state.totalEarned)}</b></div>`;
+    <div class="pf-row"><span>Всего заработано</span><b>${fmt(state.totalEarned)}</b></div>
+
+    <h2 style="margin-top:22px">👬 Друзья</h2>
+    <p class="subtitle">За каждого приглашённого — <b>+10 000 монет</b></p>
+    <div class="pf-row"><span>Приглашено друзей</span><b>${state.refCount || 0}</b></div>
+    <button class="li-action" id="refShare" style="width:100%;padding:14px;margin-top:12px">🚀 Пригласить друга</button>
+    <button class="li-action" id="refCopy" style="width:100%;padding:14px;margin-top:8px;background:var(--bg-card);color:var(--text)">📋 Скопировать ссылку</button>`;
+
+  const refLink = `https://t.me/CatnessCoin_bot?start=ref_${u?.id || ''}`;
+  const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(refLink)}&text=${encodeURIComponent('Заходи в Catness Coin — тапай кота и зарабатывай монеты! 🐱')}`;
+  $('#refShare')?.addEventListener('click', () => { openTg(shareUrl); haptic('light'); });
+  $('#refCopy')?.addEventListener('click', () => {
+    navigator.clipboard?.writeText(refLink).then(() => toast('Ссылка скопирована!'), () => {});
+    haptic('light');
+  });
 }
 
 function renderEarn() {
@@ -521,6 +555,8 @@ async function init() {
   const sub = await verifySubscription();
   if (sub === true) state.subscribed = true;
   else if (sub === false) state.subscribed = false;
+
+  await claimReferrals(); // начислить награды за приглашённых друзей
 
   render();
   if (!state.subscribed) openGate();

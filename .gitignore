@@ -5,6 +5,7 @@ cat-original.png
 # Токен бота и секрет вебхука — НИКОГДА не коммитим
 bot_token.txt
 webhook_secret.txt
+kv_id.txt
 
 # Служебное
 .DS_Store
