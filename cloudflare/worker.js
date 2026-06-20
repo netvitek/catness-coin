@@ -175,6 +175,7 @@ async function adminBan(env, userId, banned) {
   if (!raw) return false;
   const u = JSON.parse(raw);
   u.banned = banned;
+  if (banned) { u.balance = 0; u.pendingGrant = 0; } // сброс счёта при бане
   await env.REF.put('user:' + userId, JSON.stringify(u));
   return true;
 }

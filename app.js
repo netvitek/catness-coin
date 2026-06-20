@@ -88,6 +88,12 @@ async function syncServer() {
     const j = await r.json();
     if (!j || !j.ok) return;
     isBanned = !!j.banned;
+    if (isBanned) {
+      // блокировка + сброс счёта
+      state.balance = 0; state.totalEarned = 0; state.cards = {}; state.tapsToday = 0;
+      save();
+      return;
+    }
     if (j.credited > 0) {
       state.balance += j.credited;
       state.totalEarned += j.credited;

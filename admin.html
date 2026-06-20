@@ -114,9 +114,16 @@ function renderUsers(){
   document.getElementById('cntBanned').textContent = USERS.filter(u=>u.banned).length;
   const body = document.getElementById('usersBody');
   if(!list.length){ body.innerHTML = '<tr><td colspan="5" class="muted">Пусто</td></tr>'; return; }
-  body.innerHTML = list.map(u => `
+  body.innerHTML = list.map(u => {
+    const profile = u.username ? ('https://t.me/'+encodeURIComponent(u.username)) : ('tg://user?id='+u.id);
+    return `
     <tr class="${u.banned?'u-banned':''}">
-      <td>${esc(u.name||'—')} ${u.username?('@'+esc(u.username)):''} ${u.banned?'<span class=tag>BAN</span>':''}</td>
+      <td>
+        <a href="${profile}" target="_blank" rel="noopener" style="color:var(--gold);text-decoration:none">
+          ${esc(u.name||'—')} ${u.username?('@'+esc(u.username)):''} ↗
+        </a>
+        ${u.banned?'<span class=tag>BAN</span>':''}
+      </td>
       <td>${u.id}</td>
       <td>${fmt(u.balance)}</td>
       <td>${ago(u.lastSeen)}</td>
@@ -126,7 +133,8 @@ function renderUsers(){
           ? `<button class="green" onclick="ban('${u.id}',false)">Разбан</button>`
           : `<button class="red" onclick="ban('${u.id}',true)">Бан</button>`}
       </td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 }
 function esc(s){ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 async function grant(id){
@@ -140,7 +148,7 @@ async function grant(id){
 async function ban(id, val){
   if(val && !confirm('Забанить игрока '+id+'?')) return;
   const j = await api('/admin/ban', { userId:id, banned:val });
-  if(j.ok){ const u=USERS.find(x=>String(x.id)===String(id)); if(u)u.banned=val; renderUsers(); toast(val?'Забанен':'Разбанен'); }
+  if(j.ok){ const u=USERS.find(x=>String(x.id)===String(id)); if(u){u.banned=val; if(val)u.balance=0;} renderUsers(); toast(val?'Забанен, счёт обнулён':'Разбанен'); }
   else toast('Ошибка');
 }
 async function raffle(){
