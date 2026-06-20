@@ -66,6 +66,17 @@
     <div id="rfResult" class="muted" style="margin-top:8px"></div>
   </div>
 
+  <!-- Рассылка -->
+  <div class="card">
+    <h2 style="margin-top:0">📣 Рассылка всем игрокам</h2>
+    <textarea id="bcText" placeholder="Текст сообщения, которое получат все игроки в боте..." rows="3"
+      style="width:100%;background:var(--card);border:none;border-radius:10px;padding:11px 13px;color:#fff;font-size:15px;resize:vertical;font-family:inherit"></textarea>
+    <div class="row" style="margin-top:8px">
+      <button class="green" onclick="broadcast()">📤 Отправить всем</button>
+      <span id="bcResult" class="muted"></span>
+    </div>
+  </div>
+
   <!-- Список игроков -->
   <h2>👥 Игроки</h2>
   <div class="card" style="overflow-x:auto">
@@ -164,6 +175,17 @@ async function raffle(){
   toast('Розыгрыш проведён');
   loadUsers();
 }
+async function broadcast(){
+  const text = document.getElementById('bcText').value.trim();
+  if(!text){ toast('Введи текст'); return; }
+  if(!confirm('Отправить это сообщение ВСЕМ игрокам?')) return;
+  document.getElementById('bcResult').textContent = 'Отправляю…';
+  const j = await api('/admin/broadcast', { text });
+  if(!j.ok){ document.getElementById('bcResult').textContent='Ошибка'; return; }
+  document.getElementById('bcResult').textContent = `Отправлено: ${j.sent} из ${j.total}` + (j.failed?`, не дошло: ${j.failed}`:'');
+  toast('Рассылка отправлена');
+}
+
 // автологин из сессии
 const saved = sessionStorage.getItem('cc_admin');
 if(saved){ document.getElementById('pass').value = saved; enter(); }

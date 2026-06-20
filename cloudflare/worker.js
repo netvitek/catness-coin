@@ -145,6 +145,7 @@ async function handleAdmin(path, request, env) {
   if (path === '/admin/grant') return json({ ok: await adminGrant(env, String(body.userId), Math.floor(body.amount || 0)) });
   if (path === '/admin/ban') return json({ ok: await adminBan(env, String(body.userId), !!body.banned) });
   if (path === '/admin/raffle') return json({ ok: true, winners: await adminRaffle(env, parseInt(body.count || 1, 10), Math.floor(body.prize || 0)) });
+  if (path === '/admin/broadcast') return json({ ok: true, ...(await adminBroadcast(env, String(body.text || ''))) });
   return json({ ok: false, error: 'unknown' });
 }
 
@@ -178,6 +179,26 @@ async function adminBan(env, userId, banned) {
   if (banned) { u.balance = 0; u.pendingGrant = 0; } // сброс счёта при бане
   await env.REF.put('user:' + userId, JSON.stringify(u));
   return true;
+}
+async function adminBroadcast(env, text) {
+  if (!text.trim()) return { sent: 0, failed: 0, total: 0 };
+  const users = await adminUsers(env);
+  let sent = 0, failed = 0;
+  for (const u of users) {
+    const ok = await tgSend(env.BOT_TOKEN, u.id, text);
+    if (ok) sent++; else failed++;
+  }
+  return { sent, failed, total: users.length };
+}
+async function tgSend(token, chatId, text) {
+  try {
+    const r = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: true }),
+    });
+    const j = await r.json();
+    return !!j.ok;
+  } catch (_) { return false; }
 }
 async function adminRaffle(env, count, prize) {
   const users = (await adminUsers(env)).filter((u) => !u.banned);

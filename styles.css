@@ -241,68 +241,6 @@ html, body {
 }
 .invite-banner b { font-size: 16px; }
 .invite-banner p { font-size: 12px; opacity: .85; margin-top: 4px; }
-/* Карточка «Ежедневная серия» на главной */
-.streak-card {
-  display: flex; align-items: center; gap: 12px; width: 100%;
-  border: none; cursor: pointer; text-align: left; color: var(--text);
-  background: linear-gradient(120deg, #241c2e, var(--bg-soft));
-  border-radius: 16px; padding: 11px 14px; margin: 8px 0 2px;
-  transition: box-shadow .25s, background .25s;
-}
-.streak-card.ready {
-  background: linear-gradient(120deg, rgba(245,197,66,.20), #241c2e);
-  box-shadow: 0 0 0 1.5px rgba(245,197,66,.45), 0 6px 18px rgba(245,197,66,.12);
-}
-.sc-icon { position: relative; font-size: 38px; line-height: 1; flex: 0 0 auto; }
-.sc-icon b {
-  position: absolute; left: 0; right: 0; top: 58%; transform: translateY(-50%);
-  text-align: center; font-size: 14px; font-weight: 900; color: #fff;
-  text-shadow: 0 1px 2px rgba(0,0,0,.85);
-}
-.sc-mid { display: flex; flex-direction: column; flex: 1; gap: 2px; min-width: 0; }
-.sc-title { font-weight: 800; font-size: 15px; }
-.sc-sub { font-size: 12px; color: var(--text-dim); }
-.sc-cta {
-  flex: 0 0 auto; background: var(--gold); color: #15151c;
-  font-weight: 800; font-size: 13px; padding: 8px 15px; border-radius: 999px;
-}
-.streak-card.ready .sc-cta { animation: ctaPulse 1.5s ease-in-out infinite; }
-@keyframes ctaPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.06)} }
-
-/* Окно стрика — герой с огоньком */
-.streak-hero { text-align: center; margin: 6px 0 14px; }
-.streak-flame-big { position: relative; font-size: 84px; line-height: 1; }
-.streak-flame-big b {
-  position: absolute; left: 0; right: 0; top: 58%; transform: translateY(-50%);
-  text-align: center; font-size: 30px; font-weight: 900; color: #fff;
-  text-shadow: 0 2px 4px rgba(0,0,0,.75);
-}
-.streak-hero-text { font-weight: 700; font-size: 16px; margin-top: 4px; }
-
-/* Лента дней */
-.streak-strip {
-  display: flex; gap: 10px; overflow-x: auto;
-  padding: 4px 2px 10px; margin-top: 10px;
-  -webkit-overflow-scrolling: touch;
-}
-.streak-day {
-  position: relative; flex: 0 0 auto; width: 96px;
-  background: var(--bg-card); border-radius: 16px;
-  padding: 12px 8px 14px; text-align: center;
-  border: 2px solid transparent;
-}
-.streak-day.current {
-  border-color: var(--gold);
-  background: linear-gradient(160deg, rgba(245,197,66,.22), var(--bg-card));
-}
-.streak-day.claimed { opacity: .5; }
-.sd-day { font-size: 13px; color: var(--text-dim); font-weight: 700; margin-bottom: 6px; }
-.sd-bigcoin { font-size: 38px; line-height: 1; margin: 2px 0 6px; }
-.sd-coin { font-weight: 800; font-size: 14px; }
-.sd-check {
-  position: absolute; top: 6px; right: 8px;
-  color: var(--green); font-weight: 900; font-size: 15px;
-}
 
 /* Профиль */
 .pf-head { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }

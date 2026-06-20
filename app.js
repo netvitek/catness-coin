@@ -137,8 +137,6 @@ const DEFAULT_STATE = {
   subscribed: false,     // подписан на канал (обязательно для игры)
   subBonusGiven: false,  // бонус за подписку уже выдан (чтобы не фармили)
   refCount: 0,           // сколько друзей приглашено (с сервера)
-  streakDay: 0,          // текущий день стрика (0 = ещё не забирал)
-  streakLastDay: '',     // дата последнего забранного дня (YYYY-MM-DD)
   firstSeen: 0,          // дата первого захода (для профиля)
   boostUntil: 0,         // до какого времени активен x5
   boostCdUntil: 0,       // до какого времени кулдаун (нельзя жать)
@@ -266,23 +264,6 @@ function render() {
   } else {
     leagueProgressEl.style.width = '100%';
   }
-  updateStreakWidget();
-}
-
-// Виджет стрика на главной (огонёк + число)
-function updateStreakWidget() {
-  const numEl = $('#streakNum');
-  if (!numEl) return;
-  const st = streakStatus();
-  const cur = st.claimable ? Math.max(0, st.day - 1) : state.streakDay;
-  numEl.textContent = cur;
-  const subEl = $('#streakSub');
-  if (subEl) subEl.textContent = st.claimable
-    ? `День ${st.day} · награда готова`
-    : `Серия ${state.streakDay} ${plur(state.streakDay, 'день', 'дня', 'дней')} · приходи завтра`;
-  const cta = $('#streakCta');
-  if (cta) cta.style.display = st.claimable ? '' : 'none';
-  $('#streakWidget')?.classList.toggle('ready', st.claimable);
 }
 
 // ===== Тап =====
@@ -333,9 +314,6 @@ tapButton.addEventListener('pointerdown', () => {
   if (img) { img.style.transform = 'scale(.95)'; setTimeout(() => img.style.transform = '', 80); }
 });
 
-// ===== Виджет стрика на главной =====
-$('#streakWidget')?.addEventListener('click', () => { openStreak(); haptic('light'); });
-
 // ===== Буст (x5 на 20 сек, кулдаун 30 сек) =====
 const BOOST_DURATION = 20000; // длительность эффекта
 const BOOST_COOLDOWN = 30000; // кулдаун между использованиями
@@ -381,97 +359,6 @@ function updateBoostUI() {
     btn.classList.remove('cooling');
     cd.classList.remove('show');
   }
-}
-
-// ===== Ежедневный стрик (день 1, 2, 3… без предела; пропуск дня — сброс) =====
-function streakReward(day) {
-  return 1000 * day; // День 1 = 1к, День 2 = 2к, +1к каждый день
-}
-function dayOffsetStr(offset) {
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() + offset);
-  return d.toISOString().slice(0, 10);
-}
-// Какой день можно забрать прямо сейчас
-function streakStatus() {
-  const today = todayStr();
-  if (state.streakLastDay === today) return { claimable: false, day: state.streakDay };
-  const day = (state.streakLastDay === dayOffsetStr(-1))
-    ? (state.streakDay || 0) + 1  // забирал вчера — продолжаем
-    : 1;                          // пропустил день / первый раз — с 1
-  return { claimable: true, day };
-}
-function claimStreak() {
-  const st = streakStatus();
-  if (!st.claimable) return;
-  const reward = streakReward(st.day);
-  state.streakDay = st.day;
-  state.streakLastDay = todayStr();
-  state.balance += reward;
-  state.totalEarned += reward;
-  haptic('medium');
-  toast(`🎁 День ${st.day}: +${fmt(reward)}!`);
-  closeSheet();
-  render();
-  save();
-}
-function maybeShowStreak() {
-  if (state.subscribed && streakStatus().claimable) openStreak();
-}
-function openStreak() {
-  const st = streakStatus();
-  const day = st.day;                 // день, который сейчас в фокусе
-  const heroNum = st.claimable ? Math.max(0, day - 1) : state.streakDay; // текущий «огонёк»
-
-  // Лента дней: показываем 30 вперёд, можно листать
-  let strip = '';
-  for (let d = 1; d <= day + 29; d++) {
-    const claimed = d < day || (!st.claimable && d <= state.streakDay);
-    const cls = (st.claimable && d === day) ? 'current' : (claimed ? 'claimed' : '');
-    strip += `
-      <div class="streak-day ${cls}" ${d === day ? 'id="sdCurrent"' : ''}>
-        <div class="sd-day">День ${d}</div>
-        <div class="sd-bigcoin">🪙</div>
-        <div class="sd-coin">${fmt(streakReward(d))}</div>
-        ${claimed ? '<div class="sd-check">✓</div>' : ''}
-      </div>`;
-  }
-
-  const hero = `
-    <div class="streak-hero">
-      <div class="streak-flame-big">🔥<b>${heroNum}</b></div>
-      <div class="streak-hero-text">${heroNum} ${plur(heroNum, 'день', 'дня', 'дней')} подряд</div>
-    </div>`;
-
-  if (st.claimable) {
-    sheetBody.innerHTML = `
-      <h2>🔥 Стрик</h2>
-      ${hero}
-      <p class="subtitle">Заходи каждый день — награда растёт на 1 000. Пропустишь день — стрик сгорит!</p>
-      <div class="streak-strip">${strip}</div>
-      <button class="li-action" id="streakClaim" style="width:100%;padding:15px;margin-top:16px">Забрать День ${day} · +${fmt(streakReward(day))} 🪙</button>`;
-    openSheet();
-    $('#streakClaim').addEventListener('click', claimStreak);
-  } else {
-    const next = (state.streakDay || 0) + 1;
-    sheetBody.innerHTML = `
-      <h2>🔥 Стрик</h2>
-      ${hero}
-      <p class="subtitle">Награда за сегодня уже забрана 🎉 Возвращайся завтра!</p>
-      <div class="pf-row"><span>Завтра — День ${next}</span><b>+${fmt(streakReward(next))} 🪙</b></div>
-      <div class="streak-strip">${strip}</div>`;
-    openSheet();
-  }
-  // прокрутим к текущему дню
-  setTimeout(() => { document.getElementById('sdCurrent')?.scrollIntoView({ inline: 'center', block: 'nearest' }); }, 50);
-}
-
-// склонение: 1 день / 2 дня / 5 дней
-function plur(n, one, few, many) {
-  const m10 = n % 10, m100 = n % 100;
-  if (m10 === 1 && m100 !== 11) return one;
-  if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return few;
-  return many;
 }
 
 // ===== Вкладки / шторка =====
@@ -586,11 +473,7 @@ function renderProfile() {
     <p class="subtitle">За каждого приглашённого — <b>+10 000 монет</b></p>
     <div class="pf-row"><span>Приглашено друзей</span><b>${state.refCount || 0}</b></div>
     <button class="li-action" id="refShare" style="width:100%;padding:14px;margin-top:12px">🚀 Пригласить друга</button>
-    <button class="li-action" id="refCopy" style="width:100%;padding:14px;margin-top:8px;background:var(--bg-card);color:var(--text)">📋 Скопировать ссылку</button>
-
-    <h2 style="margin-top:22px">📅 Стрик</h2>
-    <div class="pf-row"><span>Текущий стрик</span><b>${state.streakDay || 0} дн.</b></div>
-    <button class="li-action" id="openStreakBtn" style="width:100%;padding:14px;margin-top:12px">🎁 Ежедневная награда</button>`;
+    <button class="li-action" id="refCopy" style="width:100%;padding:14px;margin-top:8px;background:var(--bg-card);color:var(--text)">📋 Скопировать ссылку</button>`;
 
   const refLink = `https://t.me/CatnessCoin_bot?start=ref_${u?.id || ''}`;
   const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(refLink)}&text=${encodeURIComponent('Заходи в Catness Coin — тапай кота и зарабатывай монеты! 🐱')}`;
@@ -599,7 +482,6 @@ function renderProfile() {
     navigator.clipboard?.writeText(refLink).then(() => toast('Ссылка скопирована!'), () => {});
     haptic('light');
   });
-  $('#openStreakBtn')?.addEventListener('click', () => { openStreak(); haptic('light'); });
 }
 
 function renderEarn() {
@@ -709,7 +591,6 @@ function grantAccess() {
   closeSheet();
   render();
   save();
-  setTimeout(maybeShowStreak, 400); // покажем дневную награду сразу после входа
 }
 
 // ===== Тосты =====
@@ -764,7 +645,6 @@ async function init() {
   render();
   updateBoostUI();
   if (!state.subscribed) openGate();
-  else maybeShowStreak();
   startLoops();
   save();
 }
